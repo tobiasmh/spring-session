@@ -55,7 +55,7 @@ import org.springframework.util.SerializationUtils;
  * <p>
  * Each session is stored in SQL Row. An example of how each session is stored can be seen below.
  * </p>
- * 
+ *
  * <pre>session-id|creationTime|maxInactiveInterval|lastAccessedTime</pre>
  * <pre>session-id|attributeName|attributeValue</pre>
  *  *
@@ -75,9 +75,9 @@ import org.springframework.util.SerializationUtils;
 public class JdbcOperationsSessionRepository implements SessionRepository<JdbcOperationsSessionRepository.JdbcSession> {
 
 	private NamedParameterJdbcTemplate jdbcTemplate;
-	
+
 	private Integer defaultMaxInactiveInterval;
-	
+
 	/**
 	 * The key in the Hash representing {@link org.springframework.session.ExpiringSession#getCreationTime()}
 	 */
@@ -98,30 +98,31 @@ public class JdbcOperationsSessionRepository implements SessionRepository<JdbcOp
 	 * example, if the session contained an attribute named attributeName, then there would be an entry in the hash named
 	 * sessionAttr:attributeName that mapped to its value. TODO Update
 	 */
-	
-	static final String SESSION_TABLE_SCRIPT = 
+
+	static final String SESSION_TABLE_SCRIPT =
 	"CREATE TABLE IF NOT EXISTS spring_sessions ("+
 	"session_id varchar(45) NOT NULL PRIMARY KEY, "+
 	"creationTime BIGINT DEFAULT NULL, "+
 	"maxInactiveInterval INT DEFAULT NULL, "+
 	"lastAccessedTime BIGINT DEFAULT NULL "+
 	"); ";
-	
+
 	static final String SESSION_ATTRIBUTES_TABLE_SCRIPT =
 	"CREATE TABLE IF NOT EXISTS spring_sessions_attributes ("+
 	"uniqueKey varchar(100) NOT NULL PRIMARY KEY, "+
 	"session_id varchar(45) NOT NULL, "+
 	"attributeName TEXT DEFAULT NULL, "+
-	"attributeValue BLOB DEFAULT NULL"+
+	"attributeValue BLOB DEFAULT NULL, "+
+	"CONSTRAINT spring_sessions_attributes_session_id_FK FOREIGN KEY (session_id) REFERENCES spring_sessions(session_id) ON DELETE CASCADE"+
 	"); ";
-	
+
 	public JdbcOperationsSessionRepository(NamedParameterJdbcTemplate jdbcTemplate) {
 		Assert.notNull(jdbcTemplate, "jdbcTemplate cannot be null");
 		this.jdbcTemplate = jdbcTemplate;
 		this.jdbcTemplate.getJdbcOperations().execute(SESSION_TABLE_SCRIPT);
 		this.jdbcTemplate.getJdbcOperations().execute(SESSION_ATTRIBUTES_TABLE_SCRIPT);
 	}
-	
+
 	public JdbcSession createSession() {
 		JdbcSession jdbcSession = new JdbcSession();
 		if(defaultMaxInactiveInterval != null) {
@@ -133,16 +134,16 @@ public class JdbcOperationsSessionRepository implements SessionRepository<JdbcOp
 	public void save(JdbcSession session) {
 
 		this.jdbcTemplate.update("INSERT INTO spring_sessions (session_id) VALUES(:session_id) ON DUPLICATE KEY UPDATE session_id=session_id"
-				, new MapSqlParameterSource("session_id", session.getId()));		
-		
+				, new MapSqlParameterSource("session_id", session.getId()));
+
 		session.saveDelta();
-		
+
 	}
-	
+
 	@Scheduled(cron="0 * * * * *")
 	public void cleanupExpiredSessions() {
-		String query = "SELECT session_id, maxInactiveInterval, lastAccessedTime FROM spring_sessions WHERE (maxInactiveInterval + lastAccessedTime) < :currentTime"; 
-		List<Map<String, Object>> entries = this.jdbcTemplate.queryForList(query, new MapSqlParameterSource("currentTime", System.currentTimeMillis()));		
+		String query = "SELECT session_id, maxInactiveInterval, lastAccessedTime FROM spring_sessions WHERE (maxInactiveInterval * 1000 + lastAccessedTime) < :currentTime";
+		List<Map<String, Object>> entries = this.jdbcTemplate.queryForList(query, new MapSqlParameterSource("currentTime", System.currentTimeMillis()));
 		for (Map<String, Object> entry : entries) {
 			String sessionId = (String)entry.get("session_id");
 			delete(sessionId);
@@ -152,7 +153,7 @@ public class JdbcOperationsSessionRepository implements SessionRepository<JdbcOp
 	public JdbcSession getSession(String id) {
 		return getSession(id, false);
 	}
-	
+
 	/**
 	 *
 	 * @param id the session id
@@ -167,26 +168,26 @@ public class JdbcOperationsSessionRepository implements SessionRepository<JdbcOp
 		if(entries.isEmpty()) {
 			return null;
 		}
-		
+
 		Map<String, Object> sourceMap = entries.get(0);
-		
+
 		MapSession loaded = new MapSession();
-		loaded.setId(id);		
-		
+		loaded.setId(id);
+
 		loaded.setCreationTime((Long) sourceMap.get(CREATION_TIME_ATTR));
 		loaded.setMaxInactiveIntervalInSeconds((Integer) sourceMap.get(MAX_INACTIVE_ATTR));
 		loaded.setLastAccessedTime((Long) sourceMap.get(LAST_ACCESSED_ATTR));
-		
+
 		List<Map<String, Object>> attributeEntries = jdbcTemplate.queryForList("SELECT * FROM spring_sessions_attributes "
 				+ "WHERE session_id = :session_id"
 				, new MapSqlParameterSource("session_id", id));
-		
-		for (Map<String, Object> entry : attributeEntries) {			
-			
-			byte[] attributeBytes = (byte[]) entry.get("attributeValue");			
+
+		for (Map<String, Object> entry : attributeEntries) {
+
+			byte[] attributeBytes = (byte[]) entry.get("attributeValue");
 			loaded.setAttribute((String)entry.get("attributeName"), SerializationUtils.deserialize(attributeBytes));
 		}
-		
+
 		if(!allowExpired && loaded.isExpired()) {
 			return null;
 		}
@@ -207,9 +208,9 @@ public class JdbcOperationsSessionRepository implements SessionRepository<JdbcOp
 		jdbcTemplate.update("DELETE FROM spring_sessions_attributes WHERE "
 				+ "session_id = :session_id"
 				, new MapSqlParameterSource("session_id", sessionId));
-		
+
 	}
-	
+
 	/**
 	 * Sets the maximum inactive interval in seconds between requests before newly created sessions will be
 	 * invalidated. A negative time indicates that the session will never timeout. The default is 1800 (30 minutes).
@@ -220,24 +221,24 @@ public class JdbcOperationsSessionRepository implements SessionRepository<JdbcOp
 	public void setDefaultMaxInactiveInterval(int defaultMaxInactiveInterval) {
 		this.defaultMaxInactiveInterval = defaultMaxInactiveInterval;
 	}
-	
+
 	final class JdbcSession implements ExpiringSession {
-		
+
 		private final MapSession cached;
 		private Map<String, Object> sessionInformationDelta = new HashMap<String,Object>();
 		private Map<String, Object> attributeDelta = new HashMap<String,Object>();
-		
+
 		protected JdbcSession() {
 			this(new MapSession());
 			sessionInformationDelta.put(CREATION_TIME_ATTR, getCreationTime());
 			sessionInformationDelta.put(MAX_INACTIVE_ATTR, getMaxInactiveIntervalInSeconds());
 			sessionInformationDelta.put(LAST_ACCESSED_ATTR, getLastAccessedTime());
 		}
-		
+
 		protected JdbcSession(MapSession cached) {
 			this.cached = cached;
 		}
-		
+
 		public void setLastAccessedTime(long lastAccessedTime) {
 			cached.setLastAccessedTime(lastAccessedTime);
 			sessionInformationDelta.put(LAST_ACCESSED_ATTR, getLastAccessedTime());
@@ -248,7 +249,7 @@ public class JdbcOperationsSessionRepository implements SessionRepository<JdbcOp
 		}
 
 		public Object getAttribute(String attributeName) {
-			return cached.getAttribute(attributeName);			
+			return cached.getAttribute(attributeName);
 		}
 
 		public Set<String> getAttributeNames() {
@@ -275,7 +276,7 @@ public class JdbcOperationsSessionRepository implements SessionRepository<JdbcOp
 
 		public void setMaxInactiveIntervalInSeconds(int interval) {
 			cached.setMaxInactiveIntervalInSeconds(interval);
-			sessionInformationDelta.put(MAX_INACTIVE_ATTR, getMaxInactiveIntervalInSeconds());			
+			sessionInformationDelta.put(MAX_INACTIVE_ATTR, getMaxInactiveIntervalInSeconds());
 		}
 
 		public int getMaxInactiveIntervalInSeconds() {
@@ -285,54 +286,54 @@ public class JdbcOperationsSessionRepository implements SessionRepository<JdbcOp
 		public boolean isExpired() {
 			return cached.isExpired();
 		}
-		
-		private void saveDelta() {			
- 			
+
+		private void saveDelta() {
+
 			for (Entry<String, Object> e : sessionInformationDelta.entrySet()) {
-				
+
 				String allowedColumnValues = String.format("%s|%s|%s", CREATION_TIME_ATTR, MAX_INACTIVE_ATTR, LAST_ACCESSED_ATTR);
 				if (!Pattern.matches(allowedColumnValues, e.getKey())) { // To prevent injection
 					continue;
-				
+
 				}
-				String updateQuery = String.format("UPDATE spring_sessions SET %s = :value WHERE session_id = :session_id", e.getKey());				
+				String updateQuery = String.format("UPDATE spring_sessions SET %s = :value WHERE session_id = :session_id", e.getKey());
 				jdbcTemplate.update(updateQuery, new MapSqlParameterSource("session_id", getId()).addValue("value", e.getValue()));
-				
-			}			
+
+			}
 			sessionInformationDelta = new HashMap<String,Object>(sessionInformationDelta.size());
-			
+
 			String insertQuery = "INSERT INTO spring_sessions_attributes (session_id, uniqueKey, attributeName, attributeValue) "
 					+ "VALUES (:session_id, :uniqueKey, :attributeName, :attributeValue) ON DUPLICATE KEY "
 					+ "UPDATE attributeValue = :attributeValue";
-			
+
 			String deleteQuery = "DELETE FROM spring_sessions_attributes WHERE "
 					+ "uniqueKey = :uniqueKey";
-			
+
 			List<MapSqlParameterSource> insertSqlParameterSourceList = new LinkedList<MapSqlParameterSource>();
 			List<MapSqlParameterSource> deleteSqlParameterSourceList = new LinkedList<MapSqlParameterSource>();
-			
+
 			for (Entry<String, Object> e : attributeDelta.entrySet()) {
-				
+
 				String keyHash = DigestUtils.md5DigestAsHex(e.getKey().getBytes());
 				String uniqueKey = String.format("%s_%s", getId(), keyHash);
-				
+
 				if (e.getValue() == null) {
 					deleteSqlParameterSourceList.add(
 							new MapSqlParameterSource("uniqueKey", uniqueKey));
-				} else {									
+				} else {
 					insertSqlParameterSourceList.add(new MapSqlParameterSource("session_id", getId())
 					.addValue("uniqueKey", uniqueKey)
-					.addValue("attributeName", e.getKey())					
+					.addValue("attributeName", e.getKey())
 					.addValue("attributeValue", SerializationUtils.serialize(e.getValue())));
 				}
 				jdbcTemplate.batchUpdate(deleteQuery, deleteSqlParameterSourceList.toArray(new MapSqlParameterSource[deleteSqlParameterSourceList.size()]));
 				jdbcTemplate.batchUpdate(insertQuery, insertSqlParameterSourceList.toArray(new MapSqlParameterSource[insertSqlParameterSourceList.size()]));
-				
-			}			
+
+			}
 			attributeDelta = new HashMap<String,Object>(attributeDelta.size());
-						
+
 		}
-		
+
 	}
-	
+
 }
