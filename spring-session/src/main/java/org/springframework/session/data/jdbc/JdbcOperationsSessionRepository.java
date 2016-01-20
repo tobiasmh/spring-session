@@ -112,7 +112,8 @@ public class JdbcOperationsSessionRepository implements SessionRepository<JdbcOp
 	"uniqueKey varchar(100) NOT NULL PRIMARY KEY, "+
 	"session_id varchar(45) NOT NULL, "+
 	"attributeName TEXT DEFAULT NULL, "+
-	"attributeValue BLOB DEFAULT NULL"+
+	"attributeValue BLOB DEFAULT NULL, "+
+	"CONSTRAINT spring_sessions_attributes_session_id_FK FOREIGN KEY (session_id) REFERENCES spring_sessions(session_id) ON DELETE CASCADE"+
 	"); ";
 
 	public JdbcOperationsSessionRepository(NamedParameterJdbcTemplate jdbcTemplate) {
