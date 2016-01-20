@@ -181,7 +181,7 @@ public class RedisOperationsSessionRepository implements SessionRepository<Redis
 	 * @param redisConnectionFactory the {@link RedisConnectionFactory} to use.
 	 */
 	@SuppressWarnings("unchecked")
-	public RedisOperationsSessionRepository(RedisConnectionFactory redisConnectionFactory) {
+	public RedisOperationsSessionRepository(RedisConnectionFactory redisConnectionFactory) {		
 		this(createDefaultTemplate(redisConnectionFactory));
 	}
 

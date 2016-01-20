@@ -1,4 +1,5 @@
 apply from: JAVA_GRADLE
+apply from: SPRING3_GRADLE
 apply from: MAVEN_GRADLE
 
 apply plugin: 'spring-io'
@@ -18,17 +19,18 @@ dependencies {
 			"org.springframework:spring-context:$springVersion",
 			"org.springframework:spring-web:$springVersion",
 			"org.springframework:spring-messaging:$springVersion",
-			"org.springframework:spring-websocket:$springVersion"
+			"org.springframework:spring-jdbc:$springVersion",
+			"org.springframework:spring-websocket:$springVersion"			
 	provided "javax.servlet:javax.servlet-api:$servletApiVersion"
-	integrationTestCompile project(':samples:spring-embedded-redis'),
-			"redis.clients:jedis:2.4.1",
+	integrationTestCompile "redis.clients:jedis:2.4.1",
 			"org.apache.commons:commons-pool2:2.2"
 
 	testCompile "junit:junit:$junitVersion",
 			'org.mockito:mockito-core:1.9.5',
 			"org.springframework:spring-test:$springVersion",
 			'org.easytesting:fest-assert:1.4',
-			"org.springframework.security:spring-security-core:$springSecurityVersion"
+			'com.h2database:h2:1.4.187',
+			"org.springframework.security:spring-security-core:4.0.0.RELEASE"
 
 	jacoco "org.jacoco:org.jacoco.agent:0.7.2.201409121644:runtime"
 

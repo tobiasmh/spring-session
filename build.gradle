@@ -11,10 +11,11 @@ buildscript {
 	}
 }
 
-group = 'org.springframework.session'
+group = 'build.local.org.springframework.session'
 
 ext.springBootVersion = '1.2.3.RELEASE'
 ext.JAVA_GRADLE = "$rootDir/gradle/java.gradle"
+ext.SPRING3_GRADLE = "$rootDir/gradle/spring3.gradle"
 ext.MAVEN_GRADLE = "$rootDir/gradle/publish-maven.gradle"
 ext.TOMCAT_GRADLE = "$rootDir/gradle/tomcat.gradle"
 ext.TOMCAT_6_GRADLE = "$rootDir/gradle/tomcat6.gradle"
